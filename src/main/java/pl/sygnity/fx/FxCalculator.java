@@ -9,6 +9,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import pl.sygnity.fx.nbp.response.model.Currency;
 
 import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 @RestController
@@ -16,7 +18,7 @@ import java.time.LocalDate;
 public class FxCalculator {
 
     @GetMapping("/fxrates/{fromCurrency}/{toCurrency}/{date}/{amount}")
-    public Float calculateRate(@PathVariable("fromCurrency") String srcCode,
+    public BigDecimal calculateRate(@PathVariable("fromCurrency") String srcCode,
                                     @PathVariable("toCurrency") String dstCode,
                                     @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
                                     @PathVariable("amount") BigDecimal amount) {
@@ -27,7 +29,7 @@ public class FxCalculator {
                         .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
                         .build(srcCode, date))
                 .retrieve().bodyToMono(Currency.class).block();
-        Float fromRate = c.getRates().get(0).getMid();
+        String fromRate = c.getRates().get(0).getMid();
 
         //get 'to' currency to pln rate
         c = client.get()
@@ -35,14 +37,14 @@ public class FxCalculator {
                         .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
                         .build(dstCode, date))
                 .retrieve().bodyToMono(Currency.class).block();
-        Float toRate = c.getRates().get(0).getMid();
+        String toRate = c.getRates().get(0).getMid();
 
         //calculate final rate
-        Float finalRate = fromRate / toRate;
+        BigDecimal finalRate = new BigDecimal(fromRate).divide(new BigDecimal(toRate), 16, RoundingMode.HALF_UP);
 
         //get amount in 'to' currency
-        Float convertedAmount = amount.floatValue() * finalRate;
+        BigDecimal convertedAmount = amount.multiply(finalRate);
 
-        return convertedAmount;
+        return convertedAmount.round(new MathContext(3));
     }
 }

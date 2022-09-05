@@ -11,5 +11,5 @@ import java.util.List;
 @Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Rates {
-     Float mid;
+     String mid;
 }
