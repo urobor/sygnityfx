@@ -42,12 +42,12 @@ public class FxCalculator {
         return convertedAmount.round(new MathContext(3));
     }
 
-    private static BigDecimal getFxRate(String srcCode, LocalDate date) {
+    private static BigDecimal getFxRate(String currencyCode, LocalDate date) {
         WebClient client = WebClient.create("https://api.nbp.pl");
         Currency c = client.get()
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
-                        .build(srcCode, date))
+                        .build(currencyCode, date))
                 .retrieve().bodyToMono(Currency.class)
                 .onErrorResume(WebClientResponseException.class,
                         ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
