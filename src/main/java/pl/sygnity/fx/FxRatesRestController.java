@@ -1,5 +1,6 @@
 package pl.sygnity.fx;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +24,10 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping("/api/v1")
-public class FxCalculator {
+public class FxRatesRestController {
+
+    @Autowired
+    private FxRatesRepository repository;
 
     @GetMapping("/fxrates/{fromCurrency}/{toCurrency}/{date}/{amount}")
     public BigDecimal calculateRate(@PathVariable("fromCurrency") String fromCurrencyCode,
@@ -33,19 +37,30 @@ public class FxCalculator {
         if(isWeekend(date)) {
             throw new ResponseStatusException(BAD_REQUEST, "Only working days");
         }
-        //get 'from' currency to pln rate
-        BigDecimal fromRate = getFxRate(fromCurrencyCode, date);
+        BigDecimal fromRateValue = getFxRateWithCache(fromCurrencyCode, date);
 
         //get 'to' currency to pln rate
-        BigDecimal toRate = getFxRate(toCurrencyCode, date);
+        BigDecimal toRate = getFxRateWithCache(toCurrencyCode, date);
 
         //calculate final rate
-        BigDecimal finalRate = fromRate.divide(toRate, 16, RoundingMode.HALF_UP);
+        BigDecimal finalRate = fromRateValue.divide(toRate, 16, RoundingMode.HALF_UP);
 
         //get amount in 'to' currency
         BigDecimal convertedAmount = amount.multiply(finalRate);
 
         return convertedAmount.round(new MathContext(3));
+    }
+
+    private BigDecimal getFxRateWithCache(String fromCurrencyCode, LocalDate date) {
+        FxRate fromRate = repository.findByCodeAndDate(fromCurrencyCode, date);
+        BigDecimal fromRateValue;
+        if(fromRate != null) {
+            fromRateValue = fromRate.getFxRateValue();
+        } else {
+            fromRateValue = getFxRate(fromCurrencyCode, date);
+            repository.save(new FxRate(date, fromCurrencyCode, fromRateValue));
+        }
+        return fromRateValue;
     }
 
     private static BigDecimal getFxRate(String currencyCode, LocalDate date) {
