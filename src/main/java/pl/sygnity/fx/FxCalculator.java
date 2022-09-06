@@ -28,6 +28,21 @@ public class FxCalculator {
                                     @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
                                     @PathVariable("amount") BigDecimal amount) {
         //get 'from' currency to pln rate
+        BigDecimal fromRate = getFxRate(srcCode, date);
+
+        //get 'to' currency to pln rate
+        BigDecimal toRate = getFxRate(dstCode, date);
+
+        //calculate final rate
+        BigDecimal finalRate = fromRate.divide(toRate, 16, RoundingMode.HALF_UP);
+
+        //get amount in 'to' currency
+        BigDecimal convertedAmount = amount.multiply(finalRate);
+
+        return convertedAmount.round(new MathContext(3));
+    }
+
+    private static BigDecimal getFxRate(String srcCode, LocalDate date) {
         WebClient client = WebClient.create("https://api.nbp.pl");
         Currency c = client.get()
                 .uri(uriBuilder -> uriBuilder
@@ -39,28 +54,6 @@ public class FxCalculator {
         if(c == null) {
             throw new ResponseStatusException(NOT_FOUND, "Unable to find resource");
         }
-        String fromRate = c.getRates().get(0).getMid();
-
-        //get 'to' currency to pln rate
-        c = client.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
-                        .build(dstCode, date))
-                .retrieve().bodyToMono(Currency.class)
-                .onErrorResume(WebClientResponseException.class,
-                        ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
-        if(c == null) {
-            throw new ResponseStatusException(NOT_FOUND, "Unable to find resource");
-        }
-
-        String toRate = c.getRates().get(0).getMid();
-
-        //calculate final rate
-        BigDecimal finalRate = new BigDecimal(fromRate).divide(new BigDecimal(toRate), 16, RoundingMode.HALF_UP);
-
-        //get amount in 'to' currency
-        BigDecimal convertedAmount = amount.multiply(finalRate);
-
-        return convertedAmount.round(new MathContext(3));
+        return new BigDecimal(c.getRates().get(0).getMid());
     }
 }
