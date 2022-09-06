@@ -14,8 +14,11 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.ChronoField;
 
+import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
@@ -23,15 +26,18 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class FxCalculator {
 
     @GetMapping("/fxrates/{fromCurrency}/{toCurrency}/{date}/{amount}")
-    public BigDecimal calculateRate(@PathVariable("fromCurrency") String srcCode,
-                                    @PathVariable("toCurrency") String dstCode,
+    public BigDecimal calculateRate(@PathVariable("fromCurrency") String fromCurrencyCode,
+                                    @PathVariable("toCurrency") String toCurrencyCode,
                                     @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
                                     @PathVariable("amount") BigDecimal amount) {
+        if(isWeekend(date)) {
+            throw new ResponseStatusException(BAD_REQUEST, "Only working days");
+        }
         //get 'from' currency to pln rate
-        BigDecimal fromRate = getFxRate(srcCode, date);
+        BigDecimal fromRate = getFxRate(fromCurrencyCode, date);
 
         //get 'to' currency to pln rate
-        BigDecimal toRate = getFxRate(dstCode, date);
+        BigDecimal toRate = getFxRate(toCurrencyCode, date);
 
         //calculate final rate
         BigDecimal finalRate = fromRate.divide(toRate, 16, RoundingMode.HALF_UP);
@@ -55,5 +61,11 @@ public class FxCalculator {
             throw new ResponseStatusException(NOT_FOUND, "Currency (" + currencyCode + ") not found for given date: " + date);
         }
         return new BigDecimal(c.getRates().get(0).getMid());
+    }
+
+    private static boolean isWeekend(final LocalDate ld)
+    {
+        DayOfWeek day = DayOfWeek.of(ld.get(ChronoField.DAY_OF_WEEK));
+        return day == DayOfWeek.SUNDAY || day == DayOfWeek.SATURDAY;
     }
 }
