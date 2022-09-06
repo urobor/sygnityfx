@@ -6,12 +6,17 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
 import pl.sygnity.fx.nbp.response.model.Currency;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+
+import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -28,7 +33,12 @@ public class FxCalculator {
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
                         .build(srcCode, date))
-                .retrieve().bodyToMono(Currency.class).block();
+                .retrieve().bodyToMono(Currency.class)
+                .onErrorResume(WebClientResponseException.class,
+                        ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
+        if(c == null) {
+            throw new ResponseStatusException(NOT_FOUND, "Unable to find resource");
+        }
         String fromRate = c.getRates().get(0).getMid();
 
         //get 'to' currency to pln rate
@@ -36,7 +46,13 @@ public class FxCalculator {
                 .uri(uriBuilder -> uriBuilder
                         .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
                         .build(dstCode, date))
-                .retrieve().bodyToMono(Currency.class).block();
+                .retrieve().bodyToMono(Currency.class)
+                .onErrorResume(WebClientResponseException.class,
+                        ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
+        if(c == null) {
+            throw new ResponseStatusException(NOT_FOUND, "Unable to find resource");
+        }
+
         String toRate = c.getRates().get(0).getMid();
 
         //calculate final rate
