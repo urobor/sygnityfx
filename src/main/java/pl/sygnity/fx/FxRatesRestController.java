@@ -27,60 +27,12 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 public class FxRatesRestController {
 
     @Autowired
-    private FxRatesRepository repository;
-
+    FxRatesService fxRatesService;
     @GetMapping("/fxrates/{fromCurrency}/{toCurrency}/{date}/{amount}")
     public BigDecimal calculateRate(@PathVariable("fromCurrency") String fromCurrencyCode,
                                     @PathVariable("toCurrency") String toCurrencyCode,
                                     @PathVariable("date") @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date,
                                     @PathVariable("amount") BigDecimal amount) {
-        if(isWeekend(date)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Only working days");
-        }
-        BigDecimal fromRateValue = getFxRateWithCache(fromCurrencyCode, date);
-
-        //get 'to' currency to pln rate
-        BigDecimal toRate = getFxRateWithCache(toCurrencyCode, date);
-
-        //calculate final rate
-        BigDecimal finalRate = fromRateValue.divide(toRate, 16, RoundingMode.HALF_UP);
-
-        //get amount in 'to' currency
-        BigDecimal convertedAmount = amount.multiply(finalRate);
-
-        return convertedAmount.round(new MathContext(3));
-    }
-
-    private BigDecimal getFxRateWithCache(String fromCurrencyCode, LocalDate date) {
-        FxRate fromRate = repository.findByCodeAndDate(fromCurrencyCode, date);
-        BigDecimal fromRateValue;
-        if(fromRate != null) {
-            fromRateValue = fromRate.getFxRateValue();
-        } else {
-            fromRateValue = getFxRate(fromCurrencyCode, date);
-            repository.save(new FxRate(date, fromCurrencyCode, fromRateValue));
-        }
-        return fromRateValue;
-    }
-
-    private static BigDecimal getFxRate(String currencyCode, LocalDate date) {
-        WebClient client = WebClient.create("https://api.nbp.pl");
-        Currency c = client.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/exchangerates/rates/a/{currencyCode}/{date}")
-                        .build(currencyCode, date))
-                .retrieve().bodyToMono(Currency.class)
-                .onErrorResume(WebClientResponseException.class,
-                        ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
-        if(c == null) {
-            throw new ResponseStatusException(NOT_FOUND, "Currency (" + currencyCode + ") not found for given date: " + date);
-        }
-        return new BigDecimal(c.getRates().get(0).getMid());
-    }
-
-    private static boolean isWeekend(final LocalDate ld)
-    {
-        DayOfWeek day = DayOfWeek.of(ld.get(ChronoField.DAY_OF_WEEK));
-        return day == DayOfWeek.SUNDAY || day == DayOfWeek.SATURDAY;
+        return fxRatesService.calculateFxRate(fromCurrencyCode, toCurrencyCode, date, amount);
     }
 }
