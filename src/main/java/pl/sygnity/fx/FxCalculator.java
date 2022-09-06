@@ -52,7 +52,7 @@ public class FxCalculator {
                 .onErrorResume(WebClientResponseException.class,
                         ex -> ex.getRawStatusCode() == 404 ? Mono.empty() : Mono.error(ex)).block();
         if(c == null) {
-            throw new ResponseStatusException(NOT_FOUND, "Unable to find resource");
+            throw new ResponseStatusException(NOT_FOUND, "Currency (" + currencyCode + ") not found for given date: " + date);
         }
         return new BigDecimal(c.getRates().get(0).getMid());
     }
